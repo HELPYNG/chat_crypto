@@ -20,6 +20,7 @@ class ChatApp:
         self.local_port_entry = tk.Entry(self.window, width=5)
         self.remote_ip_entry = tk.Entry(self.window, width=20)
         self.remote_port_entry = tk.Entry(self.window, width=5)
+        self.key_entry = tk.Entry(self.window, width=50)
 
         self.connect_button = tk.Button(self.window, text="Conectar", command=self.connect)
         self.chat_area = scrolledtext.ScrolledText(self.window, state='disabled', width=50, height=20)
@@ -37,10 +38,13 @@ class ChatApp:
         tk.Label(self.window, text="Porta:").grid(row=1, column=2)
         self.remote_port_entry.grid(row=1, column=3)
 
-        self.connect_button.grid(row=2, column=0, columnspan=4)
-        self.chat_area.grid(row=3, column=0, columnspan=4, pady=10)
-        self.message_entry.grid(row=4, column=0, columnspan=3, pady=10)
-        self.send_button.grid(row=4, column=3)
+        tk.Label(self.window, text="Chave Fernet:").grid(row=2, column=0, columnspan=4)
+        self.key_entry.grid(row=3, column=0, columnspan=4)
+
+        self.connect_button.grid(row=4, column=0, columnspan=4)
+        self.chat_area.grid(row=5, column=0, columnspan=4, pady=10)
+        self.message_entry.grid(row=6, column=0, columnspan=3, pady=10)
+        self.send_button.grid(row=6, column=3)
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
 
@@ -49,8 +53,15 @@ class ChatApp:
         local_port = int(self.local_port_entry.get())
         remote_ip = self.remote_ip_entry.get()
         remote_port = int(self.remote_port_entry.get())
+        key = self.key_entry.get().strip()
 
-        self.fernet = Fernet(Fernet.generate_key())
+        if not key:
+            key = Fernet.generate_key().decode()
+            self.key_entry.delete(0, tk.END)
+            self.key_entry.insert(0, key)
+            self.append_chat("🔐 Nova chave gerada e inserida.")
+
+        self.fernet = Fernet(key.encode())
         global session
         session = True
 
