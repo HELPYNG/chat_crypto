@@ -1,4 +1,4 @@
-import sys
+import os
 import socket
 import base64
 import threading
@@ -6,16 +6,11 @@ from cryptography.fernet import Fernet
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
 
-peers = {}
-session = True
-lock = threading.Lock()
-
 class ChatApp:
     def __init__(self):
         self.window = tk.Tk()
-        self.window.title("Chat Application")
+        self.window.title("Chat P2P Application")
 
-        # Configuração da interface
         self.local_ip_entry = tk.Entry(self.window, width=20)
         self.local_port_entry = tk.Entry(self.window, width=5)
         self.remote_ip_entry = tk.Entry(self.window, width=20)
@@ -27,7 +22,6 @@ class ChatApp:
         self.message_entry = tk.Entry(self.window, width=50)
         self.send_button = tk.Button(self.window, text="Enviar", command=self.send_message)
 
-        # Layout
         tk.Label(self.window, text="Meu IP:").grid(row=0, column=0)
         self.local_ip_entry.grid(row=0, column=1)
         tk.Label(self.window, text="Porta:").grid(row=0, column=2)
@@ -48,6 +42,11 @@ class ChatApp:
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+        self.fernet = None
+        self.remote_address = None
+        self.sock = None
+        self.listening_thread = None
+
     def connect(self):
         local_ip = self.local_ip_entry.get()
         local_port = int(self.local_port_entry.get())
@@ -62,44 +61,39 @@ class ChatApp:
             self.append_chat("🔐 Nova chave gerada e inserida.")
 
         self.fernet = Fernet(key.encode())
-        global session
-        session = True
+        self.remote_address = (remote_ip, remote_port)
 
-        threading.Thread(target=self.listen, args=(local_ip, local_port), daemon=True).start()
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind((local_ip, local_port))
+
+        self.listening_thread = threading.Thread(target=self.listen, daemon=True)
+        self.listening_thread.start()
         self.append_chat("🔗 Conectado a " + remote_ip + ":" + str(remote_port))
 
-    def listen(self, local_ip, local_port):
-        family = socket.AF_INET
-        sock = socket.socket(family, socket.SOCK_DGRAM)
-        sock.bind((local_ip, local_port))
-
-        while session:
+    def listen(self):
+        def check_messages():
             try:
-                data, addr = sock.recvfrom(2048)
+                data, addr = self.sock.recvfrom(2048)
                 msg = self.decrypt_message(data.decode())
-
-                with lock:
-                    if addr not in peers:
-                        peers[addr] = addr
-                        self.append_chat(f"✅ Novo peer conectado: {addr}")
-
                 self.append_chat(f"[{addr}]: {msg}")
-            except:
+            except BlockingIOError:
                 pass
+            except Exception as e:
+                print(f"Erro ao receber mensagem: {e}")
+            finally:
+                self.window.after(100, check_messages)
+
+        self.sock.setblocking(False)
+        self.window.after(100, check_messages)
 
     def send_message(self):
         msg = self.message_entry.get()
         if msg == "/sair":
-            global session
-            session = False
             self.window.quit()
             return
 
-        remote_ip = self.remote_ip_entry.get()
-        remote_port = int(self.remote_port_entry.get())
         encrypted_msg = self.encrypt_message(msg)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(encrypted_msg.encode(), (remote_ip, remote_port))
+        self.sock.sendto(encrypted_msg.encode(), self.remote_address)
         self.append_chat(f"[Você]: {msg}")
         self.message_entry.delete(0, tk.END)
 
@@ -119,9 +113,10 @@ class ChatApp:
             return "[❌ Mensagem inválida ou chave errada]"
 
     def on_closing(self):
-        global session
-        session = False
+        if self.sock:
+            self.sock.close()
         self.window.destroy()
+        os._exit(0)
 
 def main():
     app = ChatApp()
