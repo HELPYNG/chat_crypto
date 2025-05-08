@@ -5,8 +5,14 @@ import threading
 from cryptography.fernet import Fernet
 import tkinter as tk
 from tkinter import scrolledtext
+from abc import ABC, abstractmethod
 
 # Singleton
+# O que é: Garante que uma classe tenha apenas uma instância e fornece um ponto de acesso global a ela.
+
+# Por que: O socket deve ser único para evitar múltiplas instâncias 
+# e conflitos na porta/local de escuta. 
+# Mantém consistência e centraliza o gerenciamento da conexão.
 class SocketManager:
     _instance = None
 
@@ -18,16 +24,26 @@ class SocketManager:
 
     def get_socket(self):
         return self.sock
+    
 
-# Factory Method
+# Simple Factory
+# Garantir que uma classe tenha apenas uma instância
+# Por que: Método estático create() encapsula a criação do objeto Fernet
 class EncryptionFactory:
-    @staticmethod
+    
     def create(key=None):
         return Fernet(key.encode() if key else Fernet.generate_key())
 
+
 # Strategy
-class EncryptionStrategy:
+# O que é: Permite que o algoritmo usado por uma classe seja selecionado em tempo de execução.
+
+# Por que: Se desejar trocar o método de criptografia no futuro (ex: para RSA, AES), basta criar uma nova classe seguindo a interface EncryptionStrategy.
+class EncryptionStrategy(ABC):
+    @abstractmethod
     def encrypt(self, msg): pass
+
+    @abstractmethod
     def decrypt(self, msg): pass
 
 class FernetEncryption(EncryptionStrategy):
@@ -43,12 +59,18 @@ class FernetEncryption(EncryptionStrategy):
         except:
             return "[\u274c Mensagem inv\u00e1lida ou chave errada]"
 
-# Adapter
+# # Adapter
+# O que é: Converte a interface de uma classe em outra interface esperada pelos clientes.
+
+# Por que: Abstrai o formato da mensagem recebida, permitindo flexibilidade para apresentar mensagens de outras formas no futuro (ex: formato JSON, logs).
 class MessageAdapter:
     def format(self, addr, msg):
         return f"[{addr}]: {msg}"
 
-# Command
+# # Command
+# O que é: Encapsula uma solicitação como um objeto, permitindo parametrizar ações.
+
+# Por que: Isola o comando de envio da ação de clique no botão. Facilita a automação, testes e desacoplamento da interface gráfica.
 class Command:
     def execute(self): pass
 
@@ -60,6 +82,10 @@ class SendMessageCommand(Command):
         self.app.send_message()
 
 # Observer
+# O que é: Permite que objetos observem mudanças em outro objeto.
+
+# Por que: O campo de texto que exibe as mensagens é notificado quando há algo novo a mostrar, 
+# podendo ser facilmente substituído ou expandido (ex: logs, notificações sonoras).
 class ChatObserver:
     def update(self, msg): pass
 
@@ -74,6 +100,9 @@ class ChatArea(ChatObserver):
         self.widget.yview(tk.END)
 
 # Facade
+# O que é: Fornece uma interface unificada para um conjunto de interfaces em um subsistema.
+
+# Por que: Simplifica o processo de conexão e configuração dos sockets e criptografia, escondendo a complexidade do ChatApp.
 class ConnectionFacade:
     def __init__(self, app):
         self.app = app
@@ -87,6 +116,10 @@ class ConnectionFacade:
         return sock
 
 # Mediator
+# O que é: Define um objeto que encapsula como um conjunto de objetos interage.
+
+# Por que: Centraliza a lógica de controle dos eventos da interface (botões, conexões), evitando acoplamento direto entre elementos da interface e a lógica principal.
+
 class ChatMediator:
     def __init__(self, app):
         self.app = app
@@ -98,6 +131,9 @@ class ChatMediator:
             self.app.handle_connection()
 
 # Template Method
+# O que é: Define o esqueleto de um algoritmo, deixando alguns passos para as subclasses.
+
+# Por que: Define um processo padrão para enviar mensagens (preparar → enviar → finalizar), e permite variações reutilizando a estrutura geral.
 class MessageSender:
     def send(self, msg):
         self.prepare(msg)
@@ -123,6 +159,9 @@ class EncryptedSender(MessageSender):
         self.app.message_entry.delete(0, tk.END)
 
 # Builder
+# O que é: Separa a construção de um objeto complexo da sua representação.
+
+# Por que: Organiza e centraliza a criação da interface gráfica, facilitando futuras alterações (como mudar o layout ou criar temas diferentes).
 class ChatUIBuilder:
     def __init__(self, app):
         self.app = app
